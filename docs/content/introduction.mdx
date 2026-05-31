@@ -1,0 +1,66 @@
+---
+title: Introduction
+---
+
+# go-openpgp-card-hl
+
+`go-openpgp-card-hl` is a high-level library for **signing** and **decrypting**
+with an OpenPGP smartcard — a YubiKey, Nitrokey, or any card exposing the
+OpenPGP applet — from Go.
+
+It wraps two lower layers so you don't have to:
+
+- the **transport**, [`cunicu.li/go-iso7816`](https://github.com/cunicu/go-iso7816)
+  + [`cunicu.li/go-openpgp-card`](https://github.com/cunicu/go-openpgp-card),
+  which speaks ISO 7816 APDUs over PC/SC, and
+- the **OpenPGP packet layer**,
+  [`ProtonMail/go-crypto`](https://github.com/ProtonMail/go-crypto), which
+  understands signatures, MPIs, and messages.
+
+On top of those it exposes three operations — **sign**, **decrypt**,
+**list-keys** — and, crucially, errors that tell a person what to do next.
+
+## Why this exists
+
+Talking to an OpenPGP card directly means establishing a PC/SC context,
+filtering for the applet, opening a transaction, verifying the right PIN in the
+right mode, pulling a `crypto.Signer` out of the card, and then hand-building a
+v4 signature packet with correctly-encoded MPIs. Get a byte wrong and you don't
+get a crash — you get a signature that silently fails to verify.
+
+This library does that work once, correctly, and hands you a
+`-----BEGIN PGP SIGNATURE-----` block. When something goes wrong before the
+card is even reachable, you get `ErrNoPCSC` ("is pcscd running?") or `ErrNoCard`
+("is the YubiKey plugged in?") instead of a bare status word.
+
+## Features
+
+- **Detached, armored signatures** over arbitrary bytes — what git, mail
+  (`multipart/signed`), and age-plugin-style tools need.
+- **EdDSA, RSA, and ECDSA** signing keys, with per-algorithm MPI encoding.
+- **RSA decryption** via the card's `crypto.Decrypter`.
+- **Structured card info** — manufacturer, serial, cardholder, and per-slot
+  algorithm / status / fingerprint.
+- **Actionable, matchable errors** — `errors.Is(err, cardhl.ErrPIN)` and friends.
+
+## What this is not
+
+- **Not a gpg-agent replacement.** It does not cache PINs, manage a keyring on
+  disk, or implement the Assuan protocol.
+- **Not a full OpenPGP implementation.** It signs and decrypts with a card. Key
+  generation, certification, and revocation belong to `go-openpgp-card` (exposed
+  via `Card.OpenPGP()`) or to GnuPG.
+- **Not an ECDH decryptor.** RSA decryption works because `go-crypto` accepts a
+  `crypto.Decrypter`; ECDH / Curve25519 needs scalar access the card does not
+  expose. Use `gpg-agent` for those keys.
+
+## Sister projects
+
+| Project | Role |
+|---------|------|
+| [floatpane/matcha](https://github.com/floatpane/matcha) | Reference consumer — signs outgoing mail with a YubiKey using this library. |
+
+> [!NOTE]
+> The package is `cardhl` when imported, but the module is
+> `github.com/floatpane/go-openpgp-card-hl`. Import as
+> `cardhl "github.com/floatpane/go-openpgp-card-hl"`.

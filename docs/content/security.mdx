@@ -1,0 +1,66 @@
+---
+title: Security Model
+---
+
+# Security Model
+
+The whole point of an OpenPGP smartcard is that the **private key never leaves
+the device**. This library is built around that property and tries hard not to
+undermine it.
+
+## What stays on the card
+
+- **Private keys.** Signing and decryption happen on the card. The library
+  never sees, derives, or reconstructs key material — it ships a digest (to
+  sign) or a wrapped session key (to unwrap) to the card and reads the result
+  back.
+- **PIN retry enforcement.** The card counts failed PINs and locks itself when
+  the counter hits zero. The library does not, and cannot, bypass this.
+- **Touch policy.** If a slot requires a physical touch, the card blocks until
+  you touch it; the library just waits.
+
+## What the library does with the PIN
+
+- The PIN (PW1) is passed **per operation** and forwarded to the card to
+  authorize that one signing or decryption call.
+- It is **never cached**, written to disk, or logged by this library.
+- Signing uses PW1 in CDS mode; decryption uses PW1 in DECIPHER mode. They are
+  the same secret; the library picks the mode.
+
+> [!CAUTION]
+> Your application is responsible for handling the PIN safely upstream of this
+> call. Read it from a secure prompt or a controlled environment variable; do
+> not hard-code it or write it to logs. The library can't protect a PIN you've
+> already leaked.
+
+## Trust boundaries
+
+- **You trust the card.** A malicious or counterfeit card could misbehave; this
+  library assumes a genuine device.
+- **You trust the public key you pass in.** `Sign` writes the issuer key ID and
+  fingerprint from the `pub` you provide into the signature; `Decrypt` selects
+  the session key by the encryption subkey in the entity you provide. Pass the
+  key that actually matches the card slot — a mismatch yields a failed
+  operation, not a silent wrong-key signature, but supplying the *wrong* public
+  key is your responsibility.
+- **You trust the PC/SC stack.** Communication with the card goes through the
+  OS PC/SC daemon. On a shared machine, another process with reader access can
+  observe APDU traffic (not the key, but the fact and timing of operations).
+
+## Things to keep an eye on
+
+The areas most likely to harbor a security-relevant bug, and the ones the
+[security policy](https://github.com/floatpane/go-openpgp-card-hl/blob/master/SECURITY.md)
+calls out:
+
+- **Signature packet construction** — a wrong byte in `buildSignaturePacket` or
+  `writeMPI` is a malleability or forgery risk, not a crash.
+- **The ECDSA DER parser** — `parseASN1Signature` bounds-checks every field so
+  crafted input errors out instead of panicking. New parsing code should hold
+  that line.
+- **The RSA decrypt path** — guard against turning the card into a padding or
+  timing oracle.
+
+Found something? Report it privately — see
+[SECURITY.md](https://github.com/floatpane/go-openpgp-card-hl/blob/master/SECURITY.md).
+Do not open a public issue for a vulnerability.

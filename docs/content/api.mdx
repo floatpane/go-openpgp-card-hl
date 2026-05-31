@@ -1,0 +1,109 @@
+---
+title: API Reference
+---
+
+# API Reference
+
+Full reference on [pkg.go.dev](https://pkg.go.dev/github.com/floatpane/go-openpgp-card-hl).
+
+The surface is small: open a `Card`, then sign, decrypt, or inspect it. Two
+free functions load public keys for the metadata those operations need.
+
+## Card
+
+```go
+func Open() (*Card, error)
+
+type Card struct { /* … */ }
+
+func (c *Card) Close() error
+func (c *Card) Sign(data []byte, pin string, pub *packet.PublicKey) ([]byte, error)
+func (c *Card) Decrypt(ciphertext []byte, pin string, key *openpgp.Entity) ([]byte, error)
+func (c *Card) Info() (*Info, error)
+func (c *Card) ListKeys() []KeyInfo
+func (c *Card) OpenPGP() *openpgpcard.Card
+```
+
+- `Open` connects to the first card exposing the OpenPGP applet, with friendly
+  failure modes (`ErrNoPCSC`, `ErrNoCard`, `ErrCardInit`).
+- A `Card` is **not** safe for concurrent use — serialize calls or open one per
+  goroutine. Always `Close` it; that releases both the card handle and the
+  PC/SC context.
+- `OpenPGP` returns the underlying `cunicu.li/go-openpgp-card` handle for
+  advanced operations (cardholder data, key generation, PIN management).
+
+## Card info
+
+```go
+type Info struct {
+    Manufacturer string
+    Serial       string // hex
+    Version      string
+    Cardholder   string // empty if unset
+    Keys         []KeyInfo
+}
+
+func (i *Info) String() string
+
+type KeyInfo struct {
+    Slot        string // "sign", "decrypt", or "auth"
+    Algorithm   string // e.g. "ed25519", "rsa2048", "nistp256"
+    Status      string // "generated", "imported", or "absent"
+    Fingerprint string // hex, uppercase; empty if absent
+}
+```
+
+`Info.String` renders the kind of block a CLI prints; `ListKeys` returns just
+the three slots if that's all you need.
+
+## Loading public keys
+
+```go
+func LoadPublicKey(path string) (*packet.PublicKey, error)
+func ParsePublicKey(r io.Reader) (*packet.PublicKey, error)
+func LoadEntity(path string) (*openpgp.Entity, error)
+func ParseEntity(r io.Reader) (*openpgp.Entity, error)
+```
+
+- `LoadPublicKey` / `ParsePublicKey` return the **signing-capable** key (a
+  signing subkey if present, else the primary) — pass this to `Sign`.
+- `LoadEntity` / `ParseEntity` return the **whole entity** — pass this to
+  `Decrypt`, which finds the encryption subkey itself.
+- All four accept ASCII-armored or binary keyrings and return `ErrBadKeyFile`
+  on parse failure.
+
+## Errors
+
+All matchable with `errors.Is`. The returned error usually wraps one of these
+with context from the card or PC/SC layer.
+
+```go
+var (
+    ErrNoPCSC         = errors.New("cannot connect to PC/SC daemon")
+    ErrNoCard         = errors.New("no OpenPGP smartcard found")
+    ErrCardInit       = errors.New("failed to initialize OpenPGP card")
+    ErrPIN            = errors.New("PIN verification failed")
+    ErrNoKey          = errors.New("no key in slot")
+    ErrUnsupportedKey = errors.New("unsupported key algorithm")
+    ErrSign           = errors.New("signing failed")
+    ErrDecrypt        = errors.New("decryption failed")
+    ErrBadKeyFile     = errors.New("could not parse public key")
+)
+```
+
+| Error | Typical cause |
+|-------|---------------|
+| `ErrNoPCSC` | `pcscd` not running, or no PC/SC stack. |
+| `ErrNoCard` | No card with the OpenPGP applet on any reader. |
+| `ErrCardInit` | Card present but the applet would not initialize. |
+| `ErrPIN` | Wrong PIN — mind the card's retry counter. |
+| `ErrNoKey` | Requested slot is empty, or no encryption subkey in the supplied key. |
+| `ErrUnsupportedKey` | Key algorithm not supported for the operation (e.g. ECDH decrypt). |
+| `ErrSign` | The card refused or failed the signing operation. |
+| `ErrDecrypt` | Message could not be decrypted with the card's key. |
+| `ErrBadKeyFile` | A public key file or reader could not be parsed. |
+
+> [!NOTE]
+> `packet` is `github.com/ProtonMail/go-crypto/openpgp/packet` and `openpgp` is
+> `github.com/ProtonMail/go-crypto/openpgp`. The card handle returned by
+> `OpenPGP()` is `cunicu.li/go-openpgp-card`.

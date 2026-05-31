@@ -1,0 +1,125 @@
+---
+title: Getting Started
+---
+
+# Getting Started
+
+## Prerequisites
+
+- **Go 1.26+**
+- A **PC/SC stack**: `pcscd` + `libccid` on Linux, the built-in stack on
+  macOS and Windows.
+- An **OpenPGP smartcard** with at least a signing key configured (a YubiKey 5,
+  Nitrokey 3, etc.).
+
+On Linux, make sure the daemon is up:
+
+```bash
+sudo systemctl enable --now pcscd.socket
+```
+
+## Install
+
+```bash
+go get github.com/floatpane/go-openpgp-card-hl
+```
+
+## Open a card
+
+```go
+package main
+
+import (
+    "fmt"
+    "log"
+
+    cardhl "github.com/floatpane/go-openpgp-card-hl"
+)
+
+func main() {
+    card, err := cardhl.Open()
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer card.Close()
+
+    info, err := card.Info()
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Print(info)
+}
+```
+
+`Open` connects to the first card exposing the OpenPGP applet. If it can't, the
+error is specific and matchable:
+
+```go
+card, err := cardhl.Open()
+switch {
+case errors.Is(err, cardhl.ErrNoPCSC):
+    // pcscd isn't running
+case errors.Is(err, cardhl.ErrNoCard):
+    // no card on any reader
+}
+```
+
+## Sign
+
+You need the **public half** of the card's signing key — it supplies the key
+ID, fingerprint, and algorithm written into the signature packet. Export it
+once (`gpg --armor --export <keyid> > key.asc`) and load it:
+
+```go
+pub, err := cardhl.LoadPublicKey("key.asc")
+if err != nil {
+    log.Fatal(err)
+}
+
+sig, err := card.Sign([]byte("hello, world"), pin, pub)
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(string(sig)) // -----BEGIN PGP SIGNATURE-----
+```
+
+`sig` is a detached, ASCII-armored signature over the bytes you passed. Verify
+it with GnuPG:
+
+```bash
+gpg --verify sig.asc message.txt
+```
+
+## Decrypt (RSA only)
+
+Decryption needs the recipient's public key so the library knows which session
+key to ask the card to unwrap:
+
+```go
+key, err := cardhl.LoadEntity("recipient.asc")
+if err != nil {
+    log.Fatal(err)
+}
+plain, err := card.Decrypt(ciphertext, pin, key)
+if err != nil {
+    log.Fatal(err)
+}
+```
+
+> [!IMPORTANT]
+> `Decrypt` supports **RSA** decryption keys only. An ECDH / Curve25519 key
+> returns `ErrUnsupportedKey`. The RSA path works because `go-crypto` will
+> accept the card as a `crypto.Decrypter`; ECDH would require the private
+> scalar, which the card never releases.
+
+## Handling the PIN
+
+The PIN (PW1) is passed per call and never cached by the library. Read it from
+a secure prompt or the environment — never hard-code it. The card enforces its
+own retry counter; too many wrong PINs blocks the card until the Admin PIN
+(PW3) resets it.
+
+> [!TIP]
+> For signing, the card uses PW1 in CDS mode; for decryption it uses PW1 in
+> DECIPHER mode. They are the *same* PIN — the library selects the correct mode
+> for you.
