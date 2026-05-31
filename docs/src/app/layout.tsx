@@ -8,7 +8,11 @@ export const metadata: Metadata = {
 		"High-level OpenPGP smartcard signer and decryptor for Go. Detached armored signatures, RSA decryption, and structured card info for YubiKey, Nitrokey, and other OpenPGP cards — with errors a human can act on.",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+	children,
+}: {
+	children: React.ReactNode;
+}) {
 	return (
 		<html lang="en">
 			<body>
@@ -25,3 +29,5 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 		</html>
 	);
 }
+
+export const viewport = { width: "device-width", initialScale: 1 };
