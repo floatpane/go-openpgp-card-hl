@@ -34,6 +34,18 @@ that lands, reach for `gpg-agent` for Curve25519 decryption.
 
 ## How it works
 
+```mermaid
+flowchart TD
+    start(["Decrypt(ciphertext, pin, key)"]) --> sub[locate encryption subkey]
+    sub --> rsa{subkey is RSA?}
+    rsa -->|no| err[ErrUnsupportedKey]
+    rsa -->|yes| pin["VERIFY PW1 (DECIPHER, 0x82)"]
+    pin --> dec[fetch card as crypto.Decrypter]
+    dec --> build["build go-crypto private key:<br/>public = parsed subkey<br/>private = card"]
+    build --> read["go-crypto ReadMessage:<br/>card unwraps session key,<br/>symmetric layer decrypts in process"]
+    read --> out([plaintext])
+```
+
 1. The recipient's encryption subkey is located in `key` (the first subkey
    whose self-signature carries an encrypt flag).
 2. Its algorithm is checked — non-RSA stops here with `ErrUnsupportedKey`.

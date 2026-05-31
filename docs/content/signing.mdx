@@ -19,7 +19,24 @@ func (c *Card) Sign(data []byte, pin string, pub *packet.PublicKey) ([]byte, err
 ## How the packet is built
 
 The card can sign a digest, but it can't build an OpenPGP signature packet —
-that's this library's job. The steps, all in `buildSignaturePacket`:
+that's this library's job.
+
+```mermaid
+sequenceDiagram
+    participant App
+    participant Lib as go-openpgp-card-hl
+    participant Card as OpenPGP card
+
+    App->>Lib: Sign(data, pin, pub)
+    Lib->>Lib: build hashed subpackets<br/>(creation time, key id, fingerprint)
+    Lib->>Lib: hash(data ‖ suffix ‖ v4 trailer) → digest
+    Lib->>Card: VERIFY PW1, then PSO:CDS(digest)
+    Card-->>Lib: raw signature
+    Lib->>Lib: MPI-encode per algorithm
+    Lib-->>App: ASCII-armored detached signature
+```
+
+The steps, all in `buildSignaturePacket`:
 
 1. **Hashed subpackets** are assembled: signature creation time (type 2),
    issuer key ID (type 16), and issuer fingerprint (type 33). These bind the
