@@ -1,6 +1,6 @@
 module github.com/floatpane/go-openpgp-card-hl
 
-go 1.26
+go 1.26.4
 
 require (
 	cunicu.li/go-iso7816 v0.8.8
