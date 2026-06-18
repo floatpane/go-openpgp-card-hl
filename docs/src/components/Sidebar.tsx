@@ -9,6 +9,7 @@ const SECTIONS = [
 	{ title: "Getting Started", slug: "getting-started" },
 	{ title: "Signing", slug: "signing" },
 	{ title: "Decryption", slug: "decryption" },
+	{ title: "PGP/MIME", slug: "mime" },
 	{ title: "API Reference", slug: "api" },
 	{ title: "Security Model", slug: "security" },
 ];

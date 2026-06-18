@@ -3,16 +3,20 @@
 //
 // It wraps the low-level transport (cunicu.li/go-iso7816 +
 // cunicu.li/go-openpgp-card) and the OpenPGP packet layer
-// (github.com/ProtonMail/go-crypto) behind three operations — sign, decrypt,
-// and list-keys — with errors that tell a human what to do next ("is pcscd
-// running?", "is the YubiKey plugged in?") instead of leaking raw APDU codes.
+// (github.com/ProtonMail/go-crypto) behind five operations — Sign, Decrypt,
+// SignMIME, DecryptMIME, and ListKeys — with errors that tell a human what to
+// do next ("is pcscd running?", "is the YubiKey plugged in?") instead of
+// leaking raw APDU codes.
 //
-// The signing path produces a detached, ASCII-armored OpenPGP signature over
-// arbitrary bytes. That is exactly what git commit signing, mail
-// (multipart/signed), and age-plugin-style tooling need; higher-level framing
-// (MIME, the git signature envelope) is left to the caller.
+// Sign produces a detached, ASCII-armored OpenPGP signature over arbitrary
+// bytes (git commit signing, age-plugin-style tooling, etc.).
 //
-// # Quick start
+// SignMIME and DecryptMIME handle RFC 3156 PGP/MIME directly: SignMIME takes
+// a raw MIME message and returns a multipart/signed message; DecryptMIME takes
+// a multipart/encrypted message and returns the plaintext, with all MIME
+// parsing and armor handling done inside the library.
+//
+// # Quick start — raw signing
 //
 //	card, err := cardhl.Open()
 //	if err != nil {
@@ -30,6 +34,15 @@
 //	    log.Fatal(err)
 //	}
 //	os.Stdout.Write(sig) // -----BEGIN PGP SIGNATURE-----
+//
+// # Quick start — PGP/MIME
+//
+//	// Sign a raw MIME message and get back a multipart/signed message.
+//	signed, err := card.SignMIME(rawMIMEMessage, pin, pub)
+//
+//	// Decrypt a multipart/encrypted message.
+//	key, err := cardhl.LoadEntity("recipient.asc")
+//	plain, err := card.DecryptMIME(encryptedMIMEMessage, pin, key)
 //
 // # Security model
 //

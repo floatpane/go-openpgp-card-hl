@@ -79,9 +79,10 @@ covered. That keeps the library out of your framing:
 - **git commit/tag signing** — git hands the object to the signing program on
   stdin and expects the armored signature on stdout. Pass that object to
   `Sign`.
-- **`multipart/signed` mail (PGP/MIME)** — canonicalize the MIME part you want
-  to protect (CRLF line endings, the right `Content-Type`), pass it to `Sign`,
-  and place the armored result in the `application/pgp-signature` part.
+- **`multipart/signed` mail (PGP/MIME)** — use `SignMIME` instead. It accepts
+  the full raw MIME message and returns a complete `multipart/signed` envelope,
+  handling boundary generation, MIME part structure, and armor internally. See
+  [PGP/MIME](./mime).
 - **Plain detached signatures** — pass the file contents; ship the `.asc`
   alongside.
 

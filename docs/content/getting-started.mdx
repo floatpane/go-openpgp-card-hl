@@ -112,6 +112,49 @@ if err != nil {
 > accept the card as a `crypto.Decrypter`; ECDH would require the private
 > scalar, which the card never releases.
 
+## Sign a PGP/MIME message
+
+`SignMIME` takes a raw MIME message (headers + `\r\n\r\n` + body) and returns a
+`multipart/signed` message ready to send. The MIME framing and boundary
+generation happen inside the library.
+
+```go
+pub, err := cardhl.LoadPublicKey("key.asc")
+if err != nil {
+    log.Fatal(err)
+}
+
+// rawMessage is a complete MIME message, e.g.:
+//   "From: you@example.com\r\nContent-Type: text/plain\r\n\r\nHello"
+signed, err := card.SignMIME(rawMessage, pin, pub)
+if err != nil {
+    log.Fatal(err)
+}
+// signed is a multipart/signed message conforming to RFC 3156.
+```
+
+## Decrypt a PGP/MIME message (RSA only)
+
+`DecryptMIME` parses a `multipart/encrypted` MIME message, decodes the PGP
+armor, and asks the card to unwrap the session key — all in one call.
+
+```go
+key, err := cardhl.LoadEntity("recipient.asc")
+if err != nil {
+    log.Fatal(err)
+}
+
+plain, err := card.DecryptMIME(encryptedMIMEMessage, pin, key)
+if err != nil {
+    log.Fatal(err)
+}
+// plain is the decrypted message body.
+```
+
+> [!IMPORTANT]
+> `DecryptMIME` (like `Decrypt`) supports **RSA** decryption keys only.
+> ECDH / Curve25519 keys return `ErrUnsupportedKey`.
+
 ## Handling the PIN
 
 The PIN (PW1) is passed per call and never cached by the library. Read it from

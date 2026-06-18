@@ -17,8 +17,16 @@ func Open() (*Card, error)
 type Card struct { /* … */ }
 
 func (c *Card) Close() error
+
+// Raw operations (arbitrary bytes / raw OpenPGP message)
 func (c *Card) Sign(data []byte, pin string, pub *packet.PublicKey) ([]byte, error)
 func (c *Card) Decrypt(ciphertext []byte, pin string, key *openpgp.Entity) ([]byte, error)
+
+// RFC 3156 PGP/MIME operations
+func (c *Card) SignMIME(payload []byte, pin string, pub *packet.PublicKey) ([]byte, error)
+func (c *Card) DecryptMIME(payload []byte, pin string, key *openpgp.Entity) ([]byte, error)
+
+// Card inspection
 func (c *Card) Info() (*Info, error)
 func (c *Card) ListKeys() []KeyInfo
 func (c *Card) OpenPGP() *openpgpcard.Card
@@ -29,6 +37,13 @@ func (c *Card) OpenPGP() *openpgpcard.Card
 - A `Card` is **not** safe for concurrent use — serialize calls or open one per
   goroutine. Always `Close` it; that releases both the card handle and the
   PC/SC context.
+- `Sign` produces a detached, ASCII-armored signature over `data` verbatim.
+- `SignMIME` accepts a raw MIME message and returns a `multipart/signed`
+  envelope (RFC 3156). The boundary, MIME structure, and armor are handled
+  internally.
+- `Decrypt` decrypts a raw binary OpenPGP message.
+- `DecryptMIME` parses a `multipart/encrypted` MIME message, decodes the armor,
+  and decrypts — equivalent to `Decrypt` but for RFC 3156 payloads.
 - `OpenPGP` returns the underlying `cunicu.li/go-openpgp-card` handle for
   advanced operations (cardholder data, key generation, PIN management).
 
@@ -88,6 +103,7 @@ var (
     ErrSign           = errors.New("signing failed")
     ErrDecrypt        = errors.New("decryption failed")
     ErrBadKeyFile     = errors.New("could not parse public key")
+    ErrMIME           = errors.New("invalid PGP/MIME structure")
 )
 ```
 
@@ -100,8 +116,9 @@ var (
 | `ErrNoKey` | Requested slot is empty, or no encryption subkey in the supplied key. |
 | `ErrUnsupportedKey` | Key algorithm not supported for the operation (e.g. ECDH decrypt). |
 | `ErrSign` | The card refused or failed the signing operation. |
-| `ErrDecrypt` | Message could not be decrypted with the card's key. |
+| `ErrDecrypt` | Message could not be decrypted with the card's key. Also wraps `ErrMIME` when `DecryptMIME` fails to parse the envelope. |
 | `ErrBadKeyFile` | A public key file or reader could not be parsed. |
+| `ErrMIME` | A `multipart/encrypted` or `multipart/signed` envelope was malformed — missing boundary, wrong media type, bad armor. |
 
 > [!NOTE]
 > `packet` is `github.com/ProtonMail/go-crypto/openpgp/packet` and `openpgp` is

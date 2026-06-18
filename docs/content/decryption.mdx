@@ -4,14 +4,15 @@ title: Decryption
 
 # Decryption
 
-`Decrypt` recovers the plaintext of an OpenPGP message, asking the card to
-unwrap the session key.
+`Decrypt` recovers the plaintext of a raw OpenPGP message, asking the card to
+unwrap the session key. For RFC 3156 `multipart/encrypted` email, use
+[`DecryptMIME`](#decryptmime) instead.
 
 ```go
 func (c *Card) Decrypt(ciphertext []byte, pin string, key *openpgp.Entity) ([]byte, error)
 ```
 
-- `ciphertext` — the OpenPGP message (armored or binary).
+- `ciphertext` — the raw OpenPGP message (binary, not the MIME envelope).
 - `pin` — the user PIN (PW1), used here in DECIPHER mode.
 - `key` — the recipient's **public** key, whose encryption subkey identifies
   the session key to unwrap. Load it with `LoadEntity` or `ParseEntity`.
@@ -75,3 +76,39 @@ if errors.Is(err, cardhl.ErrUnsupportedKey) {
     log.Fatal("this card's decryption key is ECDH; use gpg-agent")
 }
 ```
+
+## DecryptMIME
+
+For RFC 3156 `multipart/encrypted` messages, use `DecryptMIME`. It parses the
+MIME structure, extracts and decodes the armor, and calls `Decrypt` — so you
+pass in a full MIME message and get back the plaintext.
+
+```go
+func (c *Card) DecryptMIME(payload []byte, pin string, key *openpgp.Entity) ([]byte, error)
+```
+
+- `payload` — a complete `multipart/encrypted` MIME message (headers + body).
+- `pin` / `key` — same as `Decrypt`.
+
+```go
+key, err := cardhl.LoadEntity("recipient.asc")
+if err != nil {
+    log.Fatal(err)
+}
+plain, err := card.DecryptMIME(encryptedMessage, pin, key)
+if err != nil {
+    log.Fatal(err)
+}
+```
+
+`DecryptMIME` wraps `ErrDecrypt` around any MIME-parsing failure, and the
+`ErrMIME` sentinel is available if you need to distinguish a malformed envelope
+from a failed card operation:
+
+```go
+if errors.Is(err, cardhl.ErrMIME) {
+    // the message structure was invalid, not a card error
+}
+```
+
+See [PGP/MIME](./mime) for the full picture of how the MIME layer works.

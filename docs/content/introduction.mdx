@@ -17,8 +17,9 @@ It wraps two lower layers so you don't have to:
   [`ProtonMail/go-crypto`](https://github.com/ProtonMail/go-crypto), which
   understands signatures, MPIs, and messages.
 
-On top of those it exposes three operations — **sign**, **decrypt**,
-**list-keys** — and, crucially, errors that tell a person what to do next.
+On top of those it exposes five operations — **Sign**, **Decrypt**,
+**SignMIME**, **DecryptMIME**, and **ListKeys** — and, crucially, errors that
+tell a person what to do next.
 
 ## Why this exists
 
@@ -35,8 +36,11 @@ card is even reachable, you get `ErrNoPCSC` ("is pcscd running?") or `ErrNoCard`
 
 ## Features
 
-- **Detached, armored signatures** over arbitrary bytes — what git, mail
-  (`multipart/signed`), and age-plugin-style tools need.
+- **Detached, armored signatures** over arbitrary bytes — what git, mail,
+  and age-plugin-style tools need.
+- **RFC 3156 PGP/MIME** — `SignMIME` wraps any MIME message in a
+  `multipart/signed` envelope; `DecryptMIME` unwraps a `multipart/encrypted`
+  message, both with all MIME parsing and armor handling done inside the library.
 - **EdDSA, RSA, and ECDSA** signing keys, with per-algorithm MPI encoding.
 - **RSA decryption** via the card's `crypto.Decrypter`.
 - **Structured card info** — manufacturer, serial, cardholder, and per-slot
@@ -52,13 +56,14 @@ card is even reachable, you get `ErrNoPCSC` ("is pcscd running?") or `ErrNoCard`
   via `Card.OpenPGP()`) or to GnuPG.
 - **Not an ECDH decryptor.** RSA decryption works because `go-crypto` accepts a
   `crypto.Decrypter`; ECDH / Curve25519 needs scalar access the card does not
-  expose. Use `gpg-agent` for those keys.
+  expose. Use `gpg-agent` for those keys. This limitation applies to both
+  `Decrypt` and `DecryptMIME`.
 
 ## Sister projects
 
 | Project | Role |
 |---------|------|
-| [floatpane/matcha](https://github.com/floatpane/matcha) | Reference consumer — signs outgoing mail with a YubiKey using this library. |
+| [floatpane/matcha](https://github.com/floatpane/matcha) | Reference consumer — signs and decrypts PGP/MIME mail with a YubiKey using `SignMIME` and `DecryptMIME`. |
 
 > [!NOTE]
 > The package is `cardhl` when imported, but the module is
