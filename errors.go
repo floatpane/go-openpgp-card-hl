@@ -38,4 +38,8 @@ var (
 
 	// ErrBadKeyFile is returned when a public key file cannot be parsed.
 	ErrBadKeyFile = errors.New("could not parse public key")
+
+	// ErrMIME is returned when a PGP/MIME message is malformed or cannot be
+	// parsed for a card operation (e.g. missing boundary, wrong media type).
+	ErrMIME = errors.New("invalid PGP/MIME structure")
 )
