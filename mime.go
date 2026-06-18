@@ -63,12 +63,24 @@ func (c *Card) DecryptMIME(payload []byte, pin string, key *pgpcrypto.Entity) ([
 // The ASCII armor is decoded so the returned bytes are a raw OpenPGP message.
 func extractPGPCiphertext(payload []byte) ([]byte, error) {
 	headerEnd := bytes.Index(payload, []byte("\r\n\r\n"))
+	bodyOffset := 4
+	if headerEnd < 0 {
+		headerEnd = bytes.Index(payload, []byte("\n\n"))
+		bodyOffset = 2
+	}
 	if headerEnd < 0 {
 		return nil, fmt.Errorf("%w: no header/body separator", ErrMIME)
 	}
 
+	// Unfold RFC 2822 header continuations before parsing (handle both CRLF and LF line endings).
+	unfolded := strings.ReplaceAll(string(payload[:headerEnd]), "\r\n\t", " ")
+	unfolded = strings.ReplaceAll(unfolded, "\r\n ", " ")
+	unfolded = strings.ReplaceAll(unfolded, "\n\t", " ")
+	unfolded = strings.ReplaceAll(unfolded, "\n ", " ")
+
 	var contentType string
-	for _, line := range strings.Split(string(payload[:headerEnd]), "\r\n") {
+	for _, line := range strings.Split(unfolded, "\n") {
+		line = strings.TrimRight(line, "\r")
 		if strings.HasPrefix(strings.ToUpper(line), "CONTENT-TYPE:") {
 			contentType = strings.TrimSpace(line[len("Content-Type:"):])
 			break
@@ -84,7 +96,7 @@ func extractPGPCiphertext(payload []byte) ([]byte, error) {
 		return nil, fmt.Errorf("%w: missing boundary parameter", ErrMIME)
 	}
 
-	mr := multipart.NewReader(bytes.NewReader(payload[headerEnd+4:]), boundary)
+	mr := multipart.NewReader(bytes.NewReader(payload[headerEnd+bodyOffset:]), boundary)
 
 	// Discard the control part (application/pgp-encrypted, "Version: 1").
 	if _, err := mr.NextPart(); err != nil {
