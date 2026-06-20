@@ -150,17 +150,25 @@ func splitPayload(payload []byte) (headers, body []byte) {
 // in the output.
 func buildSignedPart(headers, body []byte, _ string) []byte {
 	var originalContentType []byte
+	var originalCTE []byte
 	for _, line := range bytes.Split(headers, []byte("\r\n")) {
-		if bytes.HasPrefix(bytes.ToUpper(line), []byte("CONTENT-TYPE:")) {
+		upper := bytes.ToUpper(line)
+		if bytes.HasPrefix(upper, []byte("CONTENT-TYPE:")) {
 			originalContentType = line
-			break
+		} else if bytes.HasPrefix(upper, []byte("CONTENT-TRANSFER-ENCODING:")) {
+			originalCTE = line
 		}
 	}
 
 	var part bytes.Buffer
 	if len(originalContentType) > 0 {
 		part.Write(originalContentType)
-		part.WriteString("\r\n\r\n")
+		part.WriteString("\r\n")
+		if len(originalCTE) > 0 {
+			part.Write(originalCTE)
+			part.WriteString("\r\n")
+		}
+		part.WriteString("\r\n")
 	}
 	part.Write(body)
 	return part.Bytes()
@@ -170,8 +178,10 @@ func buildSignedPart(headers, body []byte, _ string) []byte {
 func buildMultipartSigned(headers, body []byte, boundary string, armoredSig []byte) []byte {
 	var result bytes.Buffer
 
-	// Write transport headers, replacing Content-Type and MIME-Version.
+	// Write transport headers, replacing Content-Type, MIME-Version, and
+	// Content-Transfer-Encoding (CTE is invalid on multipart/* per RFC 2045).
 	var originalContentType []byte
+	var originalCTE []byte
 	for _, line := range bytes.Split(headers, []byte("\r\n")) {
 		upper := bytes.ToUpper(line)
 		if bytes.HasPrefix(upper, []byte("CONTENT-TYPE:")) {
@@ -179,6 +189,10 @@ func buildMultipartSigned(headers, body []byte, boundary string, armoredSig []by
 			continue
 		}
 		if bytes.HasPrefix(upper, []byte("MIME-VERSION:")) {
+			continue
+		}
+		if bytes.HasPrefix(upper, []byte("CONTENT-TRANSFER-ENCODING:")) {
+			originalCTE = line // move to body part, not outer
 			continue
 		}
 		if len(line) > 0 {
@@ -194,11 +208,16 @@ func buildMultipartSigned(headers, body []byte, boundary string, armoredSig []by
 	result.WriteString("protocol=\"application/pgp-signature\"\r\n")
 	result.WriteString("\r\n")
 
-	// First part: original body with its original Content-Type.
+	// First part: original body with Content-Type and Content-Transfer-Encoding.
 	result.WriteString("--" + boundary + "\r\n")
 	if len(originalContentType) > 0 {
 		result.Write(originalContentType)
-		result.WriteString("\r\n\r\n")
+		result.WriteString("\r\n")
+		if len(originalCTE) > 0 {
+			result.Write(originalCTE)
+			result.WriteString("\r\n")
+		}
+		result.WriteString("\r\n")
 	}
 	result.Write(body)
 	result.WriteString("\r\n")
