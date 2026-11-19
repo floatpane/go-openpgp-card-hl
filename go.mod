@@ -5,7 +5,7 @@ go 1.26
 require (
 	cunicu.li/go-iso7816 v0.8.8
 	cunicu.li/go-openpgp-card v0.3.11
-	github.com/ProtonMail/go-crypto v1.4.1
+	github.com/ProtonMail/go-crypto v1.5.2
 	github.com/ebfe/scard v0.0.0-20241214075232-7af069cabc25
 )
 
